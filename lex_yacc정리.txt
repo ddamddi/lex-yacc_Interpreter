@@ -1,0 +1,48 @@
+lex: semantic 분석기, input file을 토큰으로 분리
+
+yacc(yet another compiler compiler): 파싱하고 
+bison: GNU parser  yacc와 호환
+
+
+yacc input
+
+First PART
+%%
+production action
+%%
+THIRD PART
+
+
+yacc- first part
+>>>C declarations enclosed in %{%}
+>>>yacc definitions , %start, %token, %union, %type
+
+yacc-productions
+--represents grammar(production sets)
+
+
+statements: statement
+	{printf("statement");}
+		| statement statements
+	{printf("Statements\n);}
+statement: identifier '+' identifier
+	{printf("plus\n");}
+statement: identifier '-' identifier
+	{printf("minus\n");}
+
+$1, $2 ..... symbol의 값을 나타냄
+$$ left값은 나타냄(non terminal)
+$$=$1
+
+
+statement: identifier '+' identifier
+	{$$ = $1 + $3;}
+statement: identifier '-' identifier
+	{44 = $1 - $3;}
+
+
+
+<yacc-third part>
+언어 처리를 도울 c코드 포함
+- symbol table impementation
+- production과 관련된 action에 의해서 행해질 function 포함
