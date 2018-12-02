@@ -1,12 +1,14 @@
 %{
-	// #include "y.tab.h"
-	enum{ReservedWord, ID, Integer, Float, Operator, Delimiter, Comment};
+	#include "y.tab.h"
+	extern int line_number;
 %}
 
 Digit [0-9] 
 Letter [a-zA-z]
 
 %%
+{Digit} 	{printf("%s is a digit\n", yytext);}
+{Letter} 	{printf("%s is a letter\n", yytext);}
 
 "mainprog" | 
 "var" |
@@ -54,20 +56,7 @@ Letter [a-zA-z]
 
 "/*"			{ printf("%s is Comment\n", yytext); return Comment;}
 
-[ \t\n]			;
+[\n]			{line_number++;}
+[ \t]			;
 .			;
-
-%%
-
-int main()
-{
-
-	int running = 1;
-	//yyin = fopen("test.txt", "r");
-	while(running){
-		yylex();
-	
-	}	
-	return 0;
-}
 

@@ -4,14 +4,14 @@
 	void yyerror(char*);
 %}
 
-%union { int digit; char * id; char operator;};
+%union { int digit; char * ReservedWord; char * ID; int Integer; char * Operator; char Delimiter; char * Comment};
 %start program
 %token ReservedWord
-%token <op> Operator
+%token <Operator> Operator
 %token Delimiter
-%token <num> Digit
-%token <id> Letter
-%type <num> Integer Float
+%token <digit> Digit
+%token <ID> Letter
+%type <digit> Integer Float
 %type <op> sign relop addop multop
 
 %%
@@ -112,5 +112,5 @@ int main(void){
 	yyparse();
 	return 0;
 }
-
+yywrap(){}
 void yyerror (char *s) {fprintf (srderr, "%s\n", s);}
