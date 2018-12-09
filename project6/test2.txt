@@ -1,0 +1,7 @@
+mainprog main ;
+	var a : int;
+	var b : int;
+	var c : float;
+begin
+	print a
+end
