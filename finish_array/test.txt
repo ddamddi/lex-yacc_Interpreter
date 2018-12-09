@@ -1,0 +1,17 @@
+mainprog main ;
+	var a: int;
+	var arr: array[5] of int;
+function abs(c : int ; v :int) : int ;
+	var d : int;
+	var e : int;
+	begin
+		d = 1;
+		e = 2;
+		d  = d + e 
+	end
+
+begin
+	a = 10;
+	arr[0] = 111;
+	arr[1] = 222
+end
