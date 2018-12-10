@@ -1,11 +1,18 @@
 %{
 
-	#include <stdio.h>
-	#include <stdlib.h>
-	#include <string.h>
-	#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
 
-	#define NHASH 9997
+struct symbol {
+   char * name;
+   double value;
+   char type;
+   struct ast *func; /* stmt for the function */
+   struct symlist *syms; /* list of dummy args */
+};
+	#define NHASH 10
 	#define FILE_POINTER_STACK_SIZE 10
 	#define FLOAT_CHAR '1'
 	#define FLOAT_STR "1"
@@ -27,13 +34,6 @@
 	 * C user function call
 	*/
 
-	struct symbol {
-		char * name;
-		double value;
-		char type;
-		struct ast *func; /* stmt for the function */
-		struct symlist *syms; /* list of dummy args */
-	};
 
 	//struct declare
 	/* all have common initial nodetype */
@@ -103,7 +103,7 @@
 	static unsigned symhash(char *sym);
 
 	/* define a function */
-	void dodef(struct symbol *name, struct symlist *syms, struct ast *stmts);
+   struct symbol *dodef(struct symbol *name, struct symlist *syms, struct ast *stmts);
 
 	/* evaluate an AST */
 	double eval(struct ast *);
@@ -117,8 +117,10 @@
 	extern int yylineno; /* from lexer */
 	void yyerror(char *s, ...);
 
-	void newDeclareIdentifier(struct symlist * s, char *type);
-	void printValue(struct symbol * s);
+	struct symlist* newDeclareIdentifier(struct symlist * s, char *type);
+   static double calluser(struct ufncall *f);
+	void printValue(char* temp);
+	void printTab();
 %}
 
 %union {
@@ -127,30 +129,30 @@
  	struct symlist *sl;
  	int fn; /* which function */
 	char c;
-	int inum;
 	double dnum;
 	char * str;
 }
 
 %start program
-%token <s> Identifier
-%token <c> PLUS MINUS MULTIPLY DIVIDE DOT COMMA ASSIGN_SIGN DECLARE_SIGN NOT L_BRACKET R_BRACKET L_PAREN R_PAREN
-%token <str> VAR PRINT INT FLOAT SYMTAB OF ARRAY IF ELSE THEN TOK_BEGIN TOK_END WHILE RETURN NOP FUNCTION PROCEDURE MAINPROG SEMICOLON
-%token <str> SMALLER GREATER SMALLER_EQUAL GREATER_EQUAL EQUAL NOT_EQUAL QUIT
+%token <str> Identifier
+%token <c> PLUS MINUS MULTIPLY DIVIDE DOT COMMA ASSIGN_SIGN DECLARE_SIGN NOT L_BRACKET R_BRACKET L_PAREN R_PAREN PRINT
+%token <str> VAR INT FLOAT SYMTAB OF ARRAY IF ELSE THEN TOK_BEGIN TOK_END WHILE RETURN NOP FUNCTION PROCEDURE MAINPROG SEMICOLON
+%token <fn> SMALLER GREATER SMALLER_EQUAL GREATER_EQUAL EQUAL NOT_EQUAL
 %token <dnum> Double Integer
 
-%type <s> variable
-%type <sl> identifier_list
-%type <a> simple_expression term factor expression expression_list
-%type <str> print_command declarations standard_type type statement statement_list compound_statement
-%type <str> subprogram_declarations subprogram_declaration subprogram_head parameter_list argument
-%type <str> actual_parameter_expression
+%type <s> variable subprogram_head
+%type <fn> relop
+%type <sl> identifier_list argument parameter_list
+%type <a> simple_expression term factor expression expression_list compound_statement statement statement_list print_command procedure_statement
+%type <a> actual_parameter_expression
+%type <str> declarations standard_type type
+%type <str> subprogram_declarations subprogram_declaration
 
 
 
 %%
 
-program			: MAINPROG Identifier SEMICOLON declarations subprogram_declarations compound_statement
+program			: MAINPROG Identifier SEMICOLON declarations subprogram_declarations compound_statement { eval($6); printTab();}
 					;
 
 declarations	: VAR identifier_list DECLARE_SIGN type SEMICOLON declarations {newDeclareIdentifier($2, $4);}
@@ -167,8 +169,6 @@ type		: standard_type                  {
                             		strcat(tmp, $1);
               				$$ = tmp;
 				}
-
-
       | ARRAY L_BRACKET Integer R_BRACKET OF standard_type   {
 																					char* len[10];
 																				  sprintf(len, "%d", $3);
@@ -199,93 +199,107 @@ subprogram_declarations: subprogram_declaration subprogram_declarations {;}
                    | epsilon {;}
                    ;
 
-subprogram_declaration: subprogram_head declarations compound_statement {;}
+subprogram_declaration: subprogram_head declarations compound_statement {$1->func = $3; printf("%s",$1->name);$1->value =0;}
                   ;
 
-subprogram_head: FUNCTION Identifier argument DECLARE_SIGN standard_type SEMICOLON {;}
+subprogram_head: FUNCTION Identifier argument DECLARE_SIGN standard_type SEMICOLON {   struct symbol * temp = (struct symbol*)malloc(sizeof(struct symbol)); temp = lookup($2);
+                                                                                       $$ = dodef(temp, $3, NULL);
+                                                                                    }
             |PROCEDURE Identifier argument SEMICOLON {;}
             ;
 
-argument: L_PAREN parameter_list R_PAREN {;}
+argument: L_PAREN parameter_list R_PAREN {$$ =$2;}
       | epsilon {;}
       ;
 
-parameter_list		: identifier_list DECLARE_SIGN type {;}
-         		| identifier_list DECLARE_SIGN type SEMICOLON parameter_list {;}
+parameter_list		: identifier_list DECLARE_SIGN type {$$ = $1;}
+         		| identifier_list DECLARE_SIGN type SEMICOLON parameter_list {
+                                                                              struct symlist * temp = (struct symlist*)malloc(sizeof(struct symlist));
+                                                                              temp = $1;
+                                                                              while(temp->next)
+                                                                              {
+                                                                                 temp = temp->next;
+                                                                              }
+                                                                              temp->next = $5;
+                                                                              $$ = $1;
+                                                                        }
+
          		;
+compound_statement: TOK_BEGIN statement_list TOK_END { $$ = $2; }
+                  ;
 
-compound_statement: TOK_BEGIN statement_list TOK_END { $1 = $2;}
-               ;
-
-statement_list: statement {$$ = $1;}
+statement_list: statement {$$ = newast('L',$1,NULL);}
             | statement SEMICOLON statement_list {$$ = newast('L', $1, $3);}
             ;
 
-statement: variable ASSIGN_SIGN expression {printf("statmentn"); $$ = newast('=',$1,$3); eval($$); printf("statmentn314");}
-         | compound_statement { $$ = $1;}
-         | print_command {;}
+statement: variable ASSIGN_SIGN expression {$$ = newast('=',$1,$3);}
+         | compound_statement {$$ = $1; }
+         | print_command { $$ = $1;}
          | IF expression THEN statement ELSE statement { $$ = newflow('I', $2, $4, $6);}
-         | WHILE L_PAREN expression R_PAREN statement { $$ = newflow('W', $3, $5, NULL);}
-         | procedure_statement {;}
+         | WHILE L_PAREN expression R_PAREN statement {$$ = newflow('W', $3, $5, NULL); }
+         | procedure_statement {$$ =$1;}
          | RETURN expression {;}
          | NOP {;}
          ;
 
 
-print_command				: PRINT Identifier   { struct symbol * temp = $2; printValue(&temp);}
-         				| PRINT Integer      { printf("%d\n", (int)$2);}
-         				| PRINT Double      { printf("%f\n", $2);}
-         				| SYMTAB      { //printSymAll();
-												}
+
+print_command			: PRINT L_PAREN expression R_PAREN  { $$ = newast('P', $3, NULL);}
          				;
 
-variable				: Identifier { $$ = $1;}
+variable				: Identifier { char* temp = (char*)malloc(sizeof(char)*20);
+											strcpy(temp,$1);
+											struct symbol* temp_sym= (struct symbol*)malloc(sizeof(struct symbol)*1);
+											temp_sym = lookup(temp);
+											$$ = temp_sym; }
          				| Identifier L_BRACKET expression R_BRACKET { //char * temp = arrayVariable($1, $3); $$ = temp;
 																					}
          				;
 
-procedure_statement			: Identifier L_PAREN actual_parameter_expression R_PAREN {;}
+procedure_statement			: Identifier L_PAREN actual_parameter_expression R_PAREN {struct symbol * func = (struct symbol*)malloc(sizeof(struct symbol));
+                                                                                       func = lookup($1);
+                                                                                       $$ = newcall(func,$3);}
                				;
 
 actual_parameter_expression		: epsilon {;}
-                     			| expression_list { $$ = $1;}
+                     			| expression_list {$$ = $1;}
                      			;
 
-expression_list			: expression { $$ = $1;}
+expression_list			: expression { $$ = newast('L',$1,NULL);}
             			| expression COMMA expression_list { $$ = newast('L', $1, $3);}
             			;
 
 expression			: simple_expression	{ $$ = $1;}
-	   			| simple_expression relop simple_expression { }
+	   			| simple_expression relop simple_expression {  $$ = newcmp($2, $1, $3);}
         		 	;
 
 simple_expression		: term              {$$ = $1;}
-            			| term PLUS simple_expression { $$ = newast('+', $1, $3); }
-         			| term MINUS simple_expression { $$ = newast('-', $1, $3); }
+            			| term PLUS simple_expression { $$ = newast('+', $1, $3);}
+         			| term MINUS simple_expression { $$ = newast('-', $1, $3);}
          			;
 
-term		:	factor     { $$ = $1;}
+term		   : factor     { $$ = $1;}
       		| factor MULTIPLY term { $$ = newast('*', $1, $3) ; }
       		| factor DIVIDE term { 	$$ = newast('/', $1, $3) ;}
       		;
 
-factor	: Integer      { $$ = newnum($1); }
-	      | Double         { $$ = newnum($1); }
+factor	: Integer      { $$ = newnum($1);}
+	      | Double         { $$ = newnum($1);}
       	| variable      { $$ = newref($1);}
       	| procedure_statement {;}
-      	| NOT factor
-      	| PLUS factor
-      	| MINUS factor
+      	| NOT factor {;}
+      	| PLUS factor {;}
+      	| MINUS factor {;}
       	;
 
 
-relop: SMALLER
-   	| SMALLER_EQUAL
-   	| GREATER
-   	| GREATER_EQUAL
-   	| EQUAL
-   	| NOT_EQUAL;
-   	;
+relop    : SMALLER {$$ = $1;}
+         | SMALLER_EQUAL {$$ = $1;}
+   	   | GREATER {$$ = $1;}
+   	   | GREATER_EQUAL {$$ = $1;}
+         | EQUAL {$$ = $1;}
+         | NOT_EQUAL {$$ = $1;}
+         ;
 
 epsilon: {;}
 		;
@@ -300,17 +314,21 @@ void yyerror(char *s, ...) {
 	fprintf(stderr, "\n");
 }
 
-void newDeclareIdentifier(struct symlist * s, char *type){
+struct symlist* newDeclareIdentifier(struct symlist * s, char *type){
 	//type declare
+   struct symlist* temp = (struct symlist*)malloc(sizeof(struct symlist));
 	while( s->next != NULL){
-			printf("2\n");
 		s->sym->type = type[0];
 		s = s->next;
 	}
+   temp =s;
+   return temp;
 }
 
-void printValue(struct symbol * s){
-	printf("%s %f\n", s->name,s->value);
+void printValue(char* temp){
+	struct symbol * temp_sym = (struct symbol*)malloc(sizeof(struct symbol) * 1);
+	temp_sym = lookup(temp);
+	printf("%s : %f\n",temp_sym->name, temp_sym->value);
 }
 
 void assignSymbolValue(struct symbol * s, struct ast * a){
@@ -321,17 +339,19 @@ void assignSymbolValue(struct symbol * s, struct ast * a){
 
 struct symbol * lookup(char* sym){
 	struct symbol *sp = &symtab[symhash(sym)%NHASH];
+	struct symbol *temp = (struct symbol*)malloc(sizeof(struct symbol)*1);
 	int scount = NHASH; /* how many have we looked at */
 
 	while(--scount >= 0) {
 		if(sp->name && !strcmp(sp->name, sym)) { return sp; }
 		if(!sp->name) { /* new entry */
 			sp->name = strdup(sym);
-			sp->value = 0;
+			sp->value = -1;
 			sp->func = NULL;
 			sp->syms = NULL;
 			return sp;
 		}
+
 
 		if(++sp >= symtab+NHASH) sp = symtab; /* try the next entry */
 
@@ -541,7 +561,6 @@ double eval(struct ast *a){
 			v = eval(a->l) / eval(a->r);
 			break;
  		case '|':
-			v = fabs(eval(a->l));
 			break;
  		case 'M':
 			v = -eval(a->l);
@@ -549,6 +568,7 @@ double eval(struct ast *a){
 
 		/* comparisons */
  		case '1':
+         printf("he\n");
 			v = (eval(a->l) > eval(a->r))? 1 : 0;
 			break;
  		case '2':
@@ -567,6 +587,10 @@ double eval(struct ast *a){
 			v = (eval(a->l) <= eval(a->r))? 1 : 0;
 			break;
 
+      //print
+      case 'P':
+         printf("%f\n", eval(a->l));
+         break;
 		/* control flow */
  		/* null expressions allowed in the grammar, so check for them */
  		/* if/then/else */
@@ -589,23 +613,116 @@ double eval(struct ast *a){
 
 		/* while/do */
 		case 'W':
+         printf("in while\n");
  			v = 0.0; /* a default value */
 			if( ((struct flow *)a)->tl) {
  				while( eval(((struct flow *)a)->cond) != 0 )
  					v = eval(((struct flow *)a)->tl);
  			}
  			break; /* value of last statement is value of while/do */
-
  		/* list of statements */
  		case 'L':
 			eval(a->l); v = eval(a->r);
 			break;
+      case 'C':
+         v = calluser((struct ufncall *)a);
+         break;
  		default:
 			printf("internal error: bad node %c\n", a->nodetype);
 	}
 	return v;
 }
 
+static double calluser(struct ufncall *f)
+{
+   struct symbol *fn = f->s; /* function name */
+   struct symlist *sl; /* dummy arguments */
+   struct ast *args = f->l; /* actual arguments */
+   double *oldval, *newval; /* saved arg values */
+   double v;
+   int nargs;
+   int i;
+
+   if(!fn->func) {
+      yyerror("call to undefined function", fn->name);
+      return 0;
+   }
+
+   /* count the arguments */
+   sl = fn->syms;
+   for(nargs = 0; sl; sl = sl->next)
+      nargs++;
+
+   /* define a function */
+   /* prepare to save them */
+   oldval = (double *)malloc(nargs * sizeof(double));
+   newval = (double *)malloc(nargs * sizeof(double));
+
+   if(!oldval || !newval) {
+         yyerror("Out of space in %s", fn->name); return 0.0;
+   }
+
+   /* evaluate the arguments */
+   for(i = 0; i < nargs; i++) {
+      if(!args) {
+         yyerror("too few args in call to %s", fn->name);
+         free(oldval); free(newval);
+         return 0.0;
+      }
+      if(args->nodetype == 'L') { /* if this is a list node */
+         newval[i] = eval(args->l);
+         args = args->r;
+      }
+      else { /* if it's the end of the list */
+         newval[i] = eval(args);
+         args = NULL;
+      }
+   }
+
+   /* save old values of dummies, assign new ones */
+   sl = fn->syms;
+   for(i = 0; i < nargs; i++) {
+      struct symbol *s = sl->sym;
+      oldval[i] = s->value;
+      s->value = newval[i];
+      sl = sl->next;
+   }
+   free(newval);
+
+   /* evaluate the function */
+   v = eval(fn->func);
+
+   /* put the real values of the dummies back */
+   sl = fn->syms;
+   for(i = 0; i < nargs; i++) {
+      struct symbol *s = sl->sym;
+      s->value = oldval[i];
+      sl = sl->next;
+   }
+   free(oldval);
+   return v;
+}
+
+struct symbol * dodef(struct symbol * name, struct symlist * syms, struct ast * func){
+   struct symbol * temp = (struct symbol*)malloc(sizeof(struct symbol));
+   if(name->syms)
+      symlistfree(name->syms);
+   if(name->func)
+      treefree(name->func);
+
+   name->syms = syms;
+   name->func = func;
+   temp = name;
+   return temp;
+}
+
+void printTab(){
+	int i;
+	for(int i =0; i<NHASH;i++)
+	{
+		printf("name : %s value : %f\n",symtab[i].name,symtab[i].value);
+	}
+}
 int main(int argc, char *argv[]) {
 
 
@@ -615,7 +732,6 @@ int main(int argc, char *argv[]) {
       symtab[i].value = 0;
 
    }
-   flag = 1;
 
    yyin = fopen(argv[1], "r");
 

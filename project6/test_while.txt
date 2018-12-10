@@ -1,0 +1,13 @@
+mainprog main ;
+	var a, b, c : int;
+begin
+	a = 3;
+	b = 12;
+	while ( a> 0)
+	begin
+		a=a-1;
+		print (a)
+	end;
+
+	print (b)
+end

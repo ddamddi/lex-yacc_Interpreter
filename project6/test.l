@@ -3,9 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include "y.tab.h"
-
-
 
 %}
 
@@ -19,7 +18,7 @@ Digit [0-9]
 "#".*\n		{ yylineno++; }
 
 "var"		{return VAR;}
-"print"         {return PRINT;}
+"print"         {yylval.c = 'P'; return PRINT;}
 "int"		{return INT;}
 "float"		{return FLOAT;}
 "table"         {return SYMTAB;}
@@ -37,7 +36,7 @@ Digit [0-9]
 "procedure"	{return PROCEDURE;}
 "mainprog"      {return MAINPROG;}
 
-{Letter}({Letter}|{Digit})*		{yylval.s = lookup(yytext); return Identifier;}
+{Letter}({Letter}|{Digit})*		{lookup(yytext); yylval.str = strdup(yytext);return Identifier;}
 
 {Digit}+				{yylval.dnum = atof(yytext);return Integer;}
 
@@ -54,12 +53,13 @@ Digit [0-9]
 ":"         				{yylval.c = yytext[0]; return DECLARE_SIGN;}
 "!"         				{yylval.c = yytext[0]; return NOT;}
 
-"<"           				{return SMALLER;}
-">"           				{return GREATER;}
-"<="       				{return SMALLER_EQUAL;}
-">="       				{return GREATER_EQUAL;}
-"=="       				{return EQUAL;}
-"!="      				{return NOT_EQUAL;}
+
+">"           				{yylval.fn = 1; return GREATER;}
+"<"           				{yylval.fn = 2; return SMALLER;}
+"!="                    {yylval.fn = 3; return NOT_EQUAL;}
+"=="                    {yylval.fn = 4; return EQUAL;}
+">="                    {yylval.fn = 5; return GREATER_EQUAL;}
+"<="       				   {yylval.fn = 6;return SMALLER_EQUAL;}
 
 
 "["         				{yylval.c = yytext[0]; return L_BRACKET;}

@@ -1,0 +1,17 @@
+mainprog main ;
+	var a ,b,c : int;
+begin
+	b= 2;
+	a = 1;
+	print (a);
+	print (b);
+
+	if b-a
+	then
+	a=10
+	else
+	b=1111;
+
+	print (a);
+	print (b)
+end

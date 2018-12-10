@@ -1,0 +1,21 @@
+mainprog main;
+	var a, b,c : int;
+
+	function sub(e, f:int; g:int) : int;
+		var d : int;
+	begin
+		d =a+b;
+		e= b+c;
+		g =c+c;
+		print(d);
+		print(e);
+		print(f)
+	end
+begin
+	a =1;
+	b =2;
+	c =3;
+	print( a);
+	print( b);
+	sub(a,b,c)
+end
